@@ -1,0 +1,30 @@
+version: '3.8'
+services:
+  frontend:
+    build: ./client
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:5000/api
+  backend:
+    build: ./server
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/digitaltwin
+      - JWT_SECRET=your_jwt_secret
+      - AI_SERVICE_URL=http://ai-service:8000
+    depends_on:
+      - mongodb
+  ai-service:
+    build: ./ai-service
+    ports:
+      - "8000:8000"
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+volumes:
+  mongodb_data:

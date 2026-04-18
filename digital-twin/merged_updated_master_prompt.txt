@@ -1,0 +1,779 @@
+================================================================= MASTER
+PROMPT — HUMAN BODY DIGITAL TWIN SIMULATOR
+================================================================= Use
+this prompt (or its numbered sub-prompts) with Claude, GPT-4, or any
+capable coding LLM to generate the full project codebase. Feed prompts
+one section at a time for best results.
+=================================================================
+
+───────────────────────────────────────────────────────────────── GLOBAL
+CONTEXT (paste this at the start of EVERY sub-prompt)
+─────────────────────────────────────────────────────────────────
+
+You are an expert full-stack developer. We are building a “Human Body
+Digital Twin Simulator” — an AI-powered preventive healthcare web
+application.
+
+TECH STACK: - Frontend: React 18 + Tailwind CSS + Three.js + Recharts -
+Backend: Node.js + Express.js + Socket.io - AI Layer: Python + FastAPI -
+Database: MongoDB + Mongoose - Auth: JWT + bcrypt
+
+ROLES: Patient | Doctor Each role has its own dashboard and feature set.
+
+Always write production-quality code: proper error handling, input
+validation, comments, and clean folder structure.
+
+================================================================= PROMPT
+1 — PROJECT SCAFFOLDING & FOLDER STRUCTURE
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate the complete folder structure for this project with all
+necessary files (empty shells are fine). Then generate:
+
+1.  package.json for the Node.js backend with all dependencies: express,
+    mongoose, bcryptjs, jsonwebtoken, socket.io, cors, dotenv, pdfkit,
+    nodemailer, multer, axios
+
+2.  package.json for the React frontend with all dependencies:
+    react-router-dom, axios, tailwindcss, three, @react-three/fiber,
+    @react-three/drei, recharts, socket.io-client, react-hot-toast,
+    react-icons, framer-motion
+
+3.  requirements.txt for the Python FastAPI service: fastapi, uvicorn,
+    spacy, requests, pydantic, python-dotenv
+
+4.  A root-level docker-compose.yml that runs:
+
+    -   frontend (port 3000)
+    -   backend (port 5000)
+    -   python-ai (port 8000)
+    -   mongodb (port 27017)
+
+5.  A .env.example file with all required environment variables.
+
+Expected folder structure:
+
+    digital-twin/
+    ├── client/          (React frontend)
+    │   └── src/
+    │       ├── components/
+    │       ├── pages/
+    │       │   ├── auth/
+    │       │   ├── patient/
+    │       │   └── doctor/
+    │       ├── context/
+    │       ├── hooks/
+    │       ├── utils/
+    │       └── services/
+    ├── server/          (Node.js backend)
+    │   └── src/
+    │       ├── models/
+    │       ├── routes/
+    │       ├── controllers/
+    │       ├── middleware/
+    │       ├── services/
+    │       └── utils/
+    └── ai-service/      (Python FastAPI)
+        ├── routes/
+        ├── models/
+        └── utils/
+
+================================================================= PROMPT
+2 — DATABASE MODELS (MongoDB + Mongoose)
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate complete Mongoose schema files for all models:
+
+1.  User.js — shared base model with role field (“patient”/“doctor”)
+    Fields: name, email, password (hashed), role, createdAt
+
+2.  PatientProfile.js Fields: userId (ref User), age, gender, height,
+    weight, bmi, bmiCategory, medicalHistory (array of strings),
+    currentMedications (array), activityLevel, goal,
+    baselineHealthScore, avatarBodyType, createdAt, updatedAt
+
+3.  HealthLog.js — one document per day per patient Fields: patientId
+    (ref User), date, foodLogs (array of {rawText, calories, protein,
+    carbs, fats, fiber}), totalCalories, totalProtein, totalCarbs,
+    totalFats, steps, workoutType, workoutDuration, waterGlasses,
+    healthScore, scoreBreakdown ({diet, activity, hydration}),
+    isChronicPatient (boolean), adherenceScore (number), createdAt
+
+4.  SimulationResult.js Fields: patientId, generatedAt, currentWeight,
+    predictions ({days30, days60, days90} each with weight, bmi,
+    obesityRisk, diabetesRisk, cardiovascularRisk), scenario (string —
+    for “what if” runs)
+
+5.  DoctorProfile.js Fields: userId (ref User), specializations (array),
+    consultationType (enum: online/offline/both), clinicName,
+    clinicAddress, clinicTimings, onlineLink, appointmentSlots (array of
+    {day, startTime, endTime}), appointmentDuration, licenseNumber,
+    isVerified, location ({type: Point, coordinates})
+
+6.  Appointment.js Fields: patientId, doctorId, dateTime, mode
+    (online/offline), status (pending/confirmed/cancelled), symptom,
+    notes, createdAt
+
+7.  EmergencyAlert.js Fields: patientId, doctorId, triggeredAt,
+    triggerType (manual/auto), message, status (active/resolved),
+    resolvedAt
+
+8.  MonitoringLog.js — doctor-assigned monitoring Fields: patientId,
+    doctorId, date, patientEntry (text), doctorRecommendation (text),
+    createdAt
+
+Include all necessary indexes (e.g., geospatial on
+DoctorProfile.location, compound index on HealthLog patientId+date).
+
+================================================================= PROMPT
+3 — BACKEND AUTH & MIDDLEWARE
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate the complete authentication system:
+
+1.  middleware/auth.js — JWT verification middleware
+
+    -   Extracts token from Authorization header
+    -   Verifies and decodes JWT
+    -   Attaches user to req.user
+    -   Role-specific middleware: requirePatient, requireDoctor
+
+2.  controllers/authController.js
+
+    -   registerPatient(req, res): validate input, hash password, create
+        User + PatientProfile stub, return JWT
+    -   registerDoctor(req, res): validate, hash, create User +
+        DoctorProfile, return JWT
+    -   login(req, res): find user by email, compare password, return
+        JWT + role
+    -   getMe(req, res): return current user’s full profile
+
+3.  routes/authRoutes.js — wire up all auth routes
+
+4.  JWT helper utils/jwt.js:
+
+    -   generateToken(userId, role)
+    -   verifyToken(token)
+
+Use bcryptjs with salt rounds of 12. JWT expiry: 7 days. Include proper
+validation (express-validator or manual).
+
+================================================================= PROMPT
+4 — PATIENT BACKEND API
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate the complete patient-side backend:
+
+1.  controllers/patientController.js with functions:
+
+    a.  setupProfile(req, res)
+
+        -   Save PatientProfile data
+        -   Calculate BMI: weight(kg) / (height(m))²
+        -   Determine BMI category
+        -   Calculate TDEE (Harris-Benedict formula)
+        -   Calculate baseline health score (rule-based)
+        -   Return profile + computed values
+
+    b.  submitDailyLog(req, res)
+
+        -   Accept: foodText, steps, workoutType, workoutDuration,
+            waterGlasses,
+        -   Call Python AI service /parse-food endpoint
+        -   Calculate health score:
+            -   Diet score: compare calories to TDEE goal (35%)
+            -   Activity score: steps + workout (30%)
+            -   
+            -   Hydration: water glasses vs. 8 target (25%)
+        -   Save HealthLog document
+        -   Return log + score + feedback messages
+        -   If chronic patient: calculate adherenceScore and trigger
+            alerts on deviation
+
+    c.  getLogs(req, res) — fetch logs with optional date range
+
+    d.  getSimulation(req, res)
+
+        -   Fetch last 30 days of logs
+        -   Calculate averages
+        -   Call Python AI /simulate endpoint
+        -   Save + return SimulationResult
+
+    e.  triggerEmergency(req, res)
+
+        -   Create EmergencyAlert
+        -   Emit socket event to doctor
+        -   Return confirmation
+
+    f.  bookAppointment(req, res)
+
+        -   Create Appointment document
+        -   Emit notification to doctor
+        -   Return appointment details
+
+2.  routes/patientRoutes.js — all routes with auth middleware
+
+Include full health score calculation logic with the weighting formula
+described above. Include feedback message generation (e.g., “Low
+activity — only 2,000 steps today”).
+
+================================================================= PROMPT
+5 — DOCTOR BACKEND API
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate the complete doctor-side backend:
+
+1.  controllers/doctorController.js with functions:
+
+    a.  setupProfile(req, res) — save DoctorProfile
+
+    b.  getPatients(req, res) — list all patients who have booked with
+        or been assigned to this doctor, include their latest health
+        score and status
+
+    c.  getAppointments(req, res) — upcoming + past, with filters
+
+    d.  updateAppointmentStatus(req, res)
+
+        -   Accept / Decline / Reschedule
+
+    e.  getPatientLogs(req, res)
+
+        -   Fetch a specific patient’s HealthLog records
+        -   Include trend data (7-day, 30-day)
+        -   Generate system insights:
+            -   “Activity dropped X% this week vs last week”
+            -   “No log submitted for N days”
+            -   “Calorie surplus trend”
+
+    f.  addRecommendation(req, res)
+
+        -   Add doctor’s note to MonitoringLog
+        -   Notify patient via socket
+
+    g.  assignMonitoring(req, res)
+
+        -   Assign a patient to doctor’s monitoring list
+
+    h.  exportPatientPDF(req, res)
+
+        -   Use pdfkit to generate a PDF report
+        -   Include: patient info, 30-day log table, weight trend,
+            health score trend, doctor’s notes
+        -   Stream PDF as response
+
+    i.  getEmergencyAlerts(req, res) — active alerts for doctor
+
+    j.  resolveEmergency(req, res) — mark alert resolved
+
+2.  routes/doctorRoutes.js — all routes with requireDoctor middleware
+
+For the PDF export, use pdfkit. Generate a clean formatted document with
+a header, patient info section, a data table for logs, and any doctor
+recommendations.
+
+================================================================= PROMPT
+6 — PYTHON FASTAPI AI SERVICE
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate the complete Python FastAPI AI microservice:
+
+1.  main.py — FastAPI app setup with CORS
+
+2.  routes/food_parser.py — POST /parse-food
+
+    -   Input: { “text”: “100g rice + 50g dal + 1 banana” }
+    -   Parse food items using regex + keyword matching
+    -   Look up nutrition from a built-in dictionary (USDA values)
+        Include at least 50 common Indian + international foods: rice,
+        dal, roti/chapati, aloo curry, paneer, chicken, egg, banana,
+        apple, milk, curd/yogurt, oats, bread, pasta, salad, etc.
+    -   Calculate totals: calories, protein, carbs, fats, fiber
+    -   Output: { items: […], totals: { calories, protein, carbs, fats,
+        fiber } }
+
+3.  routes/simulator.py — POST /simulate
+
+    -   Input: { currentWeight, age, gender, tdee, avgCalories,
+        avgSteps, medicalHistory, logs (30 days) }
+    -   Rule-based simulation engine:
+        -   Caloric surplus/deficit → weight change projection
+        -   Activity level → metabolic rate adjustment
+        -   Risk score calculation rules:
+            -   Obesity: BMI + caloric trend
+            -   Diabetes: BMI + sugar intake + low activity
+            -   Cardiovascular: age + BMI + activity + stress proxy
+    -   Output: { predictions: { days30, days60, days90 } } each with {
+        weight, bmi, riskScores }
+
+4.  routes/symptom_mapper.py — POST /map-symptom
+
+    -   Input: { “symptom”: “I have chest pain and shortness of breath”
+        }
+    -   Keyword matching with weighted scoring
+    -   Output: { specialists: [“Cardiologist”, “General Physician”],
+        urgency: “high”, message: “…” }
+    -   Map keywords:
+        -   chest pain / breathlessness → Cardiologist (urgent)
+        -   joint pain / injury / fracture → Orthopedic/Physio
+        -   skin rash / acne → Dermatologist
+        -   stomach pain / nausea → Gastroenterologist
+        -   fever / cold / flu → General Physician
+        -   anxiety / depression / stress → Psychiatrist
+        -   child issues → Pediatrician
+
+5.  utils/nutrition_db.py — static nutrition dictionary
+
+Include proper Pydantic models for all request/response validation.
+
+================================================================= PROMPT
+7 — SOCKET.IO REAL-TIME SERVICE
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate the complete Socket.io real-time notification system:
+
+1.  services/socketService.js
+    -   Initialize Socket.io on the Express server
+    -   Maintain a map of userId → socketId
+    -   Events to handle:
+        -   connection / disconnect
+        -   ‘register’ — client registers with userId
+        -   ‘emergency-alert’ — emit to specific doctor
+        -   ‘new-appointment’ — emit to doctor
+        -   ‘doctor-recommendation’ — emit to patient
+        -   ‘log-reminder’ — broadcast to patients who haven’t logged
+            today (daily cron at 8pm)
+2.  utils/notificationHelper.js
+    -   sendToUser(userId, event, data)
+    -   sendToDoctor(doctorId, event, data)
+    -   broadcastLogReminders()
+3.  Frontend hooks/useSocket.js (React)
+    -   Connect to socket on login
+    -   Listen for incoming events
+    -   Show toast notifications (react-hot-toast)
+    -   Handle emergency alert UI (full-screen red banner for doctors)
+4.  services/cronService.js
+    -   Daily cron (node-cron) at 8 PM:
+        -   Find patients who haven’t submitted today’s log
+        -   Emit ‘log-reminder’ to each
+    -   Daily cron at midnight:
+        -   Run health score calculation for any missed logs
+
+================================================================= PROMPT
+8 — REACT FRONTEND: AUTH PAGES
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate React components for the authentication flow:
+
+1.  pages/auth/LandingPage.jsx
+    -   Hero section: app name, tagline (“Your Body, Simulated”)
+    -   Two large cards: “I’m a Patient” | “I’m a Doctor”
+    -   Each card navigates to the respective login page
+    -   Clean, medical/health aesthetic (blue/green palette)
+    -   Animated with framer-motion
+2.  pages/auth/PatientLogin.jsx + PatientRegister.jsx
+    -   Form fields: name, email, password (register only)
+    -   Validation with error messages
+    -   Submit calls API, stores JWT in localStorage
+    -   Redirects to /patient/setup if new, else /patient/dashboard
+3.  pages/auth/DoctorLogin.jsx + DoctorRegister.jsx
+    -   Same pattern as patient
+    -   Register has extra fields: specialization, consultation type
+    -   On success → /doctor/setup → /doctor/dashboard
+4.  context/AuthContext.jsx
+    -   Provides: user, token, login(), logout(), isAuthenticated
+    -   Persists token in localStorage
+    -   Auto-refreshes user data on mount
+5.  components/ProtectedRoute.jsx
+    -   Wraps routes requiring auth
+    -   Role-aware:
+
+Make all forms look polished with Tailwind CSS. Include loading spinners
+and toast error messages.
+
+================================================================= PROMPT
+9 — REACT FRONTEND: PATIENT ONBOARDING
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate the Patient Onboarding multi-step form:
+
+pages/patient/ProfileSetup.jsx — multi-step wizard:
+
+Step 1 — Personal Info: - Name, Age, Gender (radio), Height (cm), Weight
+(kg) - Real-time BMI display as user types height/weight - BMI category
+badge (color-coded)
+
+Step 2 — Medical History: - Checkboxes: Diabetes, Thyroid, Hypertension,
+Heart Disease, Asthma, PCOS, None - Free text: “Any injuries or
+surgeries?” - Current medications (tag input)
+
+Step 3 — Activity & Goals: - Activity level (4 options with icons) -
+Goal selection (4 options with icons): Lose Weight | Gain Muscle |
+Maintain | Improve Stamina
+
+Step 4 — Avatar Selection: - Display 6 body type silhouettes as
+clickable cards: Skinny | Lean | Athletic | Skinny-Fat | Overweight |
+Obese - On hover: highlight + label - On select: proceed with that body
+type
+
+Step 5 — Summary + Confirm: - Show: BMI, TDEE, Baseline score, selected
+goal - “Set Up My Twin” button → submits to API
+
+Include: - Progress bar at top (steps 1–5) - Back/Next navigation - Form
+state managed with useReducer or react-hook-form - Smooth transitions
+between steps (framer-motion)
+
+================================================================= PROMPT
+10 — REACT FRONTEND: PATIENT DASHBOARD
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate the complete Patient Dashboard layout and components:
+
+1.  pages/patient/Dashboard.jsx — main layout
+    -   Left sidebar: nav links (Dashboard, Log Today, My Twin,
+        Progress, Chat, Appointments, Emergency)
+    -   Top bar: health score badge, streak counter, user avatar icon
+    -   Main content area
+2.  components/patient/TodayScore.jsx
+    -   Large circular progress ring showing today’s score (0–100)
+    -   Color: red (<40), yellow (40–69), green (70+)
+    -   Breakdown bar chart (diet/activity/sleep/hydration)
+    -   Feedback messages list
+3.  components/patient/WeeklySummary.jsx
+    -   7-day health score line chart (Recharts)
+    -   Average calorie intake vs. goal bar chart
+    -   Steps trend area chart
+4.  components/patient/QuickStats.jsx
+    -   Cards: Today’s Calories | Steps | Sleep | Water
+    -   Each with icon, value, and comparison to goal
+5.  pages/patient/DailyLog.jsx
+    -   Food input: textarea with “Parse Food” button
+    -   After parsing: show nutrition breakdown table
+    -   Steps: number input with slider
+    -   Workout: dropdown (None/Cardio/Strength/Yoga/Sports)
+        -   duration slider
+    -   Sleep: hours slider (0–12) + quality (Good/Fair/Poor)
+    -   Water: glass counter (+/- buttons, max 12)
+    -   Submit button → POST to /api/patient/log
+    -   On success: show animated score reveal
+6.  components/patient/AvatarDisplay.jsx
+    -   Three.js canvas showing the 3D avatar
+    -   Avatar model based on user’s body type + current BMI
+    -   Slow auto-rotate
+    -   Sidebar with: current weight, BMI, goal weight, progress %
+
+Use Recharts for all charts. Make dashboard mobile-responsive.
+
+================================================================= PROMPT
+11 — REACT FRONTEND: DIGITAL TWIN & SIMULATION
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate the Digital Twin simulation page:
+
+pages/patient/MyTwin.jsx:
+
+1.  Current Status Panel:
+    -   Current weight, BMI, health score
+    -   Risk indicators (4 colored badges): Obesity Risk | Diabetes Risk
+        | Cardiovascular Risk | Hypertension Risk
+    -   Each badge: color (green/yellow/orange/red) based on %
+2.  Predictions Panel:
+    -   Three columns: 30 Days | 60 Days | 90 Days
+    -   Each shows: projected weight, projected BMI, risk changes
+    -   Arrow indicators (↑ / ↓ / →) with color
+3.  Projection Chart:
+    -   Recharts LineChart showing weight projection over 90 days
+    -   X-axis: dates, Y-axis: weight (kg)
+    -   Reference line at goal weight
+    -   Single line for current trajectory
+4.  “What If” Simulator Panel:
+    -   Dropdown to select scenario:
+        -   “I stop exercising”
+        -   “I eat 300 kcal less per day”
+        -   “I sleep 8 hours every night”
+        -   “I walk 10,000 steps daily”
+        -   “I do all of the above”
+    -   “Run Simulation” button
+    -   Results overlay on chart: second line (dashed) showing the
+        alternative trajectory
+    -   Side-by-side comparison cards (current vs. scenario)
+5.  “Run My Twin” button — triggers fresh simulation API call with
+    loading state
+
+Include loading skeletons while data fetches. Use Recharts ComposedChart
+for overlaying multiple lines.
+
+================================================================= PROMPT
+12 — REACT FRONTEND: AI CHATBOT
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate the AI Health Assistant chat component:
+
+pages/patient/HealthChat.jsx:
+
+1.  Chat Interface:
+    -   Messages list (user right, bot left)
+    -   User messages: blue bubbles
+    -   Bot messages: white bubbles with bot icon
+    -   Typing indicator animation (3 dots)
+    -   Auto-scroll to latest message
+2.  Input Area:
+    -   Text input + Send button
+    -   Quick-action chips above input: “Check my BMI” | “What should I
+        eat today?” | “I have a symptom” | “Find a doctor”
+3.  Symptom Detection Flow:
+    -   When user describes symptom:
+        a.  Show “Analyzing your symptom…”
+        b.  Call /api/ai/symptom endpoint
+        c.  Show: recommended specialist(s) with icons
+        d.  Show: urgency level (Low/Medium/High/Emergency)
+        e.  If high urgency: show “Trigger Emergency” button
+        f.  Show: list of matched doctors from the system (fetched from
+            /api/doctor/search?specialization=X)
+4.  Doctor Cards (in chat):
+    -   Small cards showing: name, specialization, online/offline,
+        rating, “Book” button
+5.  Context-aware responses:
+    -   Bot has access to user’s latest health data
+    -   Responses reference actual user data: “Based on your BMI of 27.3
+        and low activity this week…”
+
+Make the chat feel smooth with message animations. Use react-hot-toast
+for connection errors.
+
+================================================================= PROMPT
+13 — REACT FRONTEND: DOCTOR DASHBOARD
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate the complete Doctor Dashboard:
+
+1.  pages/doctor/DoctorDashboard.jsx — main layout:
+    -   Left sidebar: Patient List (scrollable)
+    -   Top nav: tabs for Appointments | Monitoring | Emergency
+    -   Right panel: selected patient details or active section
+2.  components/doctor/PatientList.jsx:
+    -   Search bar
+    -   Patient cards: name, age, BMI, status badge, last log date
+    -   Status badge: Stable (green) / At Risk (yellow) / Emergency
+        (red)
+    -   Click to select patient → loads patient detail panel
+3.  components/doctor/PatientDetail.jsx — shown when patient selected:
+    -   Patient info header (name, age, BMI, medical history)
+    -   Tabs: Overview | Logs | Trends | Recommendations
+
+    Overview tab:
+    -   Latest health score + breakdown
+    -   Latest 7-day score chart
+    -   Risk indicators
+    -   System-generated insights (highlighted callouts)
+
+    Logs tab:
+    -   Table: date, calories, steps, sleep, score
+    -   Filterable by date range
+    -   “Export PDF” button (weekly/monthly dropdown)
+
+    Trends tab:
+    -   Weight over time (line chart)
+    -   Health score over time (line chart)
+    -   Activity vs. calorie intake (dual-axis chart)
+
+    Recommendations tab:
+    -   History of doctor’s notes
+    -   Rich text input to add new recommendation
+    -   Submit → saves + notifies patient via socket
+4.  components/doctor/AppointmentsPanel.jsx:
+    -   Calendar view (weekly)
+    -   Appointment cards: patient name, time, mode, symptom
+    -   Accept/Decline/Reschedule buttons
+5.  components/doctor/EmergencyCenter.jsx:
+    -   Real-time list of active emergency alerts
+    -   Each: patient name, time, trigger type, message
+    -   Red flashing border on new unread alerts
+    -   “Resolve” button
+    -   Sound alert on new emergency (optional)
+
+================================================================= PROMPT
+14 — THREE.JS 3D AVATAR SYSTEM
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate the 3D avatar system using Three.js and @react-three/fiber:
+
+components/avatar/AvatarViewer.jsx:
+
+1.  Canvas Setup:
+    -   @react-three/fiber Canvas component
+    -   OrbitControls (limited: horizontal rotation only)
+    -   Ambient + directional lighting
+    -   Background: light gradient
+2.  Avatar Model:
+    -   Use a base GLB human figure model (provide code to load from
+        /public/models/avatar_base.glb)
+    -   Morph targets for body shape variation:
+        -   ‘fat’ morph: 0.0 → 1.0 (increases with BMI)
+        -   ‘muscle’ morph: 0.0 → 1.0 (increases with activity)
+        -   ‘thin’ morph: 0.0 → 1.0 (decreases with BMI)
+    -   Morph values calculated from: fatMorph = clamp((bmi - 18.5) /
+        21.5, 0, 1) muscleMorph = clamp(activityScore / 100, 0, 1)
+3.  Avatar Animation:
+    -   Idle breathing animation (chest scale oscillation)
+    -   When new log submitted: avatar briefly “exercises” (arm swing
+        animation) then settles back
+4.  Avatar Color/Skin:
+    -   Neutral skin tone by default
+    -   User can pick skin tone from 5 options
+5.  hooks/useAvatarMorph.js:
+    -   Takes: bmi, activityScore, weightTrend
+    -   Returns: { fatMorph, muscleMorph, thinMorph }
+    -   Smoothly interpolates between values (lerp)
+6.  Also generate a 2D fallback SVG avatar for browsers that don’t
+    support WebGL: components/avatar/AvatarFallback.jsx
+    -   SVG figure with body shape variations via CSS transforms
+
+================================================================= PROMPT
+15 — PDF EXPORT SERVICE
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate the PDF export service using pdfkit in Node.js:
+
+services/pdfExportService.js:
+
+Function: generatePatientReport(patient, logs, recommendations, period)
+
+PDF Content: 1. Header: - App logo placeholder (colored rectangle) -
+“Health Progress Report” title - Generated date, period (Weekly/Monthly)
+
+2.  Patient Information Box:
+    -   Name, Age, Gender, BMI, Goal
+    -   Current health score with color indicator
+3.  Summary Statistics:
+    -   Average calories vs. goal
+    -   Average steps vs. 10,000 target
+    -   Average sleep hours vs. 8hr target
+    -   Average health score for period
+4.  Log Data Table:
+    -   Columns: Date | Calories | Steps | Sleep | Score
+    -   Alternating row colors
+    -   Color-coded score column
+5.  Charts (use ASCII/text approximations since pdfkit doesn’t support
+    SVG charts natively):
+    -   Text-based weight trend
+    -   Or use pdfkit-table for better table formatting
+6.  Doctor’s Recommendations:
+    -   List of all recommendations with dates
+7.  Footer:
+    -   “Generated by Human Body Digital Twin Simulator”
+    -   Disclaimer: “This report is for informational purposes only”
+
+Return the PDF as a Buffer for streaming to client. Also provide the
+Express route handler that: - Sets headers: Content-Type:
+application/pdf, Content-Disposition: attachment; filename=report.pdf -
+Pipes the PDF buffer to res
+
+================================================================= PROMPT
+16 — FINAL INTEGRATION & DEPLOYMENT
+=================================================================
+
+[Paste GLOBAL CONTEXT above first]
+
+Generate the final integration and deployment files:
+
+1.  server/src/index.js — main Express server:
+
+    -   Load all routes
+    -   Initialize Socket.io
+    -   Connect to MongoDB
+    -   Start cron jobs
+    -   CORS configuration
+    -   Error handling middleware
+
+2.  client/src/App.jsx — main React router:
+
+    -   All routes with ProtectedRoute wrappers
+    -   AuthContext provider wrapping entire app
+    -   Lazy loading for all page components
+
+3.  README.md — comprehensive README:
+
+    -   Project description
+    -   Feature list
+    -   Tech stack
+    -   Setup instructions (local dev)
+    -   Environment variables table
+    -   API documentation summary
+    -   How to run demo
+
+4.  Dockerfile for each service (client, server, ai-service)
+
+5.  .github/workflows/deploy.yml:
+
+    -   CI: lint + test on PR
+    -   CD: deploy to Render (server) + Vercel (client)
+
+6.  client/src/services/api.js — Axios instance:
+
+    -   Base URL from env
+    -   JWT interceptor (attaches token to every request)
+    -   401 interceptor (redirects to login on token expiry)
+    -   Error response formatter
+
+================================================================= USAGE
+INSTRUCTIONS
+=================================================================
+
+HOW TO USE THESE PROMPTS:
+
+1.  Start a new chat with Claude or ChatGPT (use Claude Sonnet or GPT-4o
+    for best results)
+
+2.  Always paste the GLOBAL CONTEXT block at the TOP of each new prompt
+
+3.  Feed prompts in order (1 → 16) across multiple sessions
+
+4.  After each prompt, ask the model: “Now generate the complete code
+    for [next component]. Follow the same patterns established so far.”
+
+5.  For the AI service (Python), run prompts 6 separately with a
+    Python-focused session
+
+6.  Save all generated files to the correct folders per the structure in
+    Prompt 1
+
+TIPS: - If a file gets too long, ask: “Continue from where you left
+off” - If code has errors, paste the error and say: “Fix this error” -
+For the avatar, you may want to use a free GLB model from Sketchfab or
+use Ready Player Me’s free API instead of building from scratch — ask
+the AI to integrate that API
+
+================================================================= END OF
+MASTER PROMPT DOCUMENT
+=================================================================
